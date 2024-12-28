@@ -1,3 +1,4 @@
-.cache/
 *.o
+.cache/
+libvulkan.dylib
 vulkookbook
