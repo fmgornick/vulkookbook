@@ -1,3 +1,5 @@
+#include <stdint.h>
+#include <stdio.h>
 #define VK_NO_PROTOTYPES
 // #define DEBUG
 
@@ -10,12 +12,15 @@
 #if defined _WIN64
 #define lib_open LoadLibrary
 #define lib_addr GetProcAddress
+#define lib_free FreeLibrary
 #elif defined __linux__
 #define lib_open (lib) dlopen(lib, RTLD_NOW)
 #define lib_addr dlsym
+#define lib_free dlclose
 #elif defined __APPLE__
 #define lib_open(lib) dlopen(lib, RTLD_NOW)
 #define lib_addr dlsym
+#define lib_free dlclose
 #endif
 
 #ifdef DEBUG
@@ -46,15 +51,19 @@ PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties;
 
 // instance-level functions
 PFN_vkCreateDevice vkCreateDevice;
+PFN_vkDestroyInstance vkDestroyInstance;
 PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties;
 PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
 PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr;
-PFN_vkGetDeviceQueue vkGetDeviceQueue;
 PFN_vkGetPhysicalDeviceFeatures vkGetPhysicalDeviceFeatures;
 PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
 PFN_vkGetPhysicalDeviceQueueFamilyProperties vkGetPhysicalDeviceQueueFamilyProperties;
 
 // instance-level extensions
+// VK_EXT_debug_report
+PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallbackEXT;
+PFN_vkDebugReportMessageEXT vkDebugReportMessageEXT;
+PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT;
 // VK_EXT_debug_utils
 PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT;
 PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT;
@@ -67,10 +76,21 @@ PFN_vkQueueInsertDebugUtilsLabelEXT vkQueueInsertDebugUtilsLabelEXT;
 PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
 PFN_vkSetDebugUtilsObjectTagEXT vkSetDebugUtilsObjectTagEXT;
 PFN_vkSubmitDebugUtilsMessageEXT vkSubmitDebugUtilsMessageEXT;
-// VK_EXT_debug_report
-PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallbackEXT;
-PFN_vkDebugReportMessageEXT vkDebugReportMessageEXT;
-PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT;
+
+// device-level extensions
+PFN_vkCreateBuffer vkCreateBuffer;
+PFN_vkDestroyDevice vkDestroyDevice;
+PFN_vkDeviceWaitIdle vkDeviceWaitIdle;
+PFN_vkGetBufferMemoryRequirements vkGetBufferMemoryRequirements;
+PFN_vkGetDeviceQueue vkGetDeviceQueue;
+
+// device-level extensions
+// VK_KHR_swapchain
+PFN_vkAcquireNextImageKHR vkAcquireNextImageKHR;
+PFN_vkCreateSwapchainKHR vkCreateSwapchainKHR;
+PFN_vkDestroySwapchainKHR vkDestroySwapchainKHR;
+PFN_vkGetSwapchainImagesKHR vkGetSwapchainImagesKHR;
+PFN_vkQueuePresentKHR vkQueuePresentKHR;
 
 int main(int argc, char *argv[]) {
     vulkan_library = lib_open("libvulkan.dylib");
@@ -165,17 +185,18 @@ int main(int argc, char *argv[]) {
     assert(device_count == 1);
     VkPhysicalDevice physical_device = available_devices[0];
     VkPhysicalDeviceProperties device_properties;
-    VkPhysicalDeviceFeatures available_device_features;
+    VkPhysicalDeviceFeatures device_features;
     vkGetPhysicalDeviceProperties(physical_device, &device_properties);
-    vkGetPhysicalDeviceFeatures(physical_device, &available_device_features);
+    vkGetPhysicalDeviceFeatures(physical_device, &device_features);
 
-    assert(available_device_features.tessellationShader);
-    available_device_features = (VkPhysicalDeviceFeatures){.tessellationShader = VK_TRUE};
+    assert(device_features.tessellationShader);
+    device_features = (VkPhysicalDeviceFeatures){.tessellationShader = VK_TRUE};
 
-    uint32_t desired_device_extensions_count = 2;
+    uint32_t desired_device_extensions_count = 3;
     const char *desired_device_extensions[] = {
         VK_EXT_DEBUG_MARKER_EXTENSION_NAME,
         VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME,
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     };
 
     uint32_t available_device_extensions_count;
@@ -214,11 +235,11 @@ int main(int argc, char *argv[]) {
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_families_count, queue_families);
     assert(queue_families_count > 0);
 
-    VkQueueFlags desired_capabilities = VK_QUEUE_GRAPHICS_BIT;
+    VkQueueFlags desired_capabilities = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
     queue_info_t *queue_infos = (queue_info_t *)malloc(sizeof(queue_info_t) * queue_families_count);
     for (uint32_t i = 0; i < queue_families_count; i++) {
         VkQueueFamilyProperties queue_family = queue_families[i];
-        assert(queue_family.queueFlags & desired_capabilities);
+        assert((queue_family.queueFlags & desired_capabilities) == desired_capabilities);
         queue_infos[i].family_index = i;
         queue_infos[i].queue_count = queue_family.queueCount;
         queue_infos[i].priorities = (float *)malloc(sizeof(float) * queue_family.queueCount);
@@ -243,15 +264,44 @@ int main(int argc, char *argv[]) {
         .pQueueCreateInfos = queue_create_infos,
         .enabledExtensionCount = desired_device_extensions_count,
         .ppEnabledExtensionNames = desired_device_extensions,
-        .pEnabledFeatures = &available_device_features,
+        .pEnabledFeatures = &device_features,
     };
 
     VkDevice logical_device;
     result = vkCreateDevice(physical_device, &device_create_info, NULL, &logical_device);
     assert(result == VK_SUCCESS && logical_device != VK_NULL_HANDLE);
 
+#define DEVICE_LEVEL_VULKAN_FUNCTION(name)                         \
+    name = (PFN_##name)vkGetDeviceProcAddr(logical_device, #name); \
+    assert(name != NULL);
+
+#define DEVICE_LEVEL_VULKAN_FUNCTION_FROM_EXTENSION(name, extension)                 \
+    for (int i = 0; i < available_device_extensions_count; i++) {                    \
+        if (strcmp(#extension, available_device_extensions[i].extensionName) == 0) { \
+            name = (PFN_##name)vkGetDeviceProcAddr(logical_device, #name);           \
+            assert(name != NULL);                                                    \
+        }                                                                            \
+    }
+
+#include "vulkan_functions.inl"
+
+    // M2 Pro - 4 queue families; each have graphics & compute bits set; 1 queue per family
+    // pick the first queue from any random family for our graphics & compute queue
+    VkQueue graphics_queue;  // first queue family, only queue
+    vkGetDeviceQueue(logical_device, 0, 0, &graphics_queue);
+    VkQueue compute_queue;  // second queue family, only queue
+    vkGetDeviceQueue(logical_device, 1, 0, &compute_queue);
+
+    vkDestroyDevice(logical_device, NULL);
+    vkDestroyInstance(instance, NULL);
+    lib_free(vulkan_library);
+    logical_device = VK_NULL_HANDLE;
+    instance = VK_NULL_HANDLE;
+    vulkan_library = NULL;
+
     for (int i = 0; i < queue_families_count; i++) free(queue_infos[i].priorities);
     free(queue_infos);
+    free(queue_create_infos);
     free(queue_families);
     free(available_device_extensions);
     free(available_instance_extensions);
