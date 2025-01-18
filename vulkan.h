@@ -1,99 +1,104 @@
-#ifndef VULKAN_H_
-#define VULKAN_H_ 1
+#ifndef VULKAN_H
+#define VULKAN_H
 
-/*
-** Copyright 2015-2024 The Khronos Group Inc.
-**
-** SPDX-License-Identifier: Apache-2.0
-*/
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_metal.h>
 
-#include "vk_platform.h"
-#include "vulkan_core.h"
+typedef struct {
+    uint32_t family_index;
+    uint32_t queue_count;
+    float *priorities;
+} queue_info_t;
 
-#ifdef VK_USE_PLATFORM_ANDROID_KHR
-#include "vulkan_android.h"
-#endif
+typedef struct {
 
-#ifdef VK_USE_PLATFORM_FUCHSIA
-#include <zircon/types.h>
-#include "vulkan_fuchsia.h"
-#endif
+    VkInstance instance;
+    VkDevice logical_device;
+    VkSurfaceKHR surface;
+    VkPresentModeKHR present_mode;
 
-#ifdef VK_USE_PLATFORM_IOS_MVK
-#include "vulkan_ios.h"
-#endif
+    // extension information
+    uint32_t desired_device_extensions_count;
+    const char **desired_device_extensions;
+    uint32_t available_instance_extensions_count;
+    VkExtensionProperties *available_instance_extensions;
 
+    // physical device information
+    uint32_t device_count;
+    VkPhysicalDevice *available_devices;
+    VkPhysicalDevice physical_device;
+    VkPhysicalDeviceProperties device_properties;
+    VkPhysicalDeviceFeatures device_features;
+    uint32_t available_device_extensions_count;
+    VkExtensionProperties *available_device_extensions;
 
-#ifdef VK_USE_PLATFORM_MACOS_MVK
-#include "vulkan_macos.h"
-#endif
+    // logical device information
+    uint32_t queue_families_count;
+    VkQueueFamilyProperties *queue_families;
+    queue_info_t *queue_infos;
+    VkDeviceQueueCreateInfo *queue_create_infos;
+    VkDeviceCreateInfo device_create_info;
 
-#ifdef VK_USE_PLATFORM_METAL_EXT
-#include "vulkan_metal.h"
-#endif
+    // global-level functions
+    PFN_vkCreateInstance vkCreateInstance;
+    PFN_vkEnumerateInstanceExtensionProperties vkEnumerateInstanceExtensionProperties;
+    PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties;
 
-#ifdef VK_USE_PLATFORM_VI_NN
-#include "vulkan_vi.h"
-#endif
+    // instance-level functions
+    PFN_vkCreateDevice vkCreateDevice;
+    PFN_vkDestroyInstance vkDestroyInstance;
+    PFN_vkEnumerateDeviceExtensionProperties vkEnumerateDeviceExtensionProperties;
+    PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
+    PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr;
+    PFN_vkGetPhysicalDeviceFeatures vkGetPhysicalDeviceFeatures;
+    PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
+    PFN_vkGetPhysicalDeviceQueueFamilyProperties vkGetPhysicalDeviceQueueFamilyProperties;
 
+    // instance-level extension functions
+    // VK_EXT_debug_utils
+    PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT;
+    PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT;
+    PFN_vkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabelEXT;
+    PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT;
+    PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT;
+    PFN_vkQueueBeginDebugUtilsLabelEXT vkQueueBeginDebugUtilsLabelEXT;
+    PFN_vkQueueEndDebugUtilsLabelEXT vkQueueEndDebugUtilsLabelEXT;
+    PFN_vkQueueInsertDebugUtilsLabelEXT vkQueueInsertDebugUtilsLabelEXT;
+    PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
+    PFN_vkSetDebugUtilsObjectTagEXT vkSetDebugUtilsObjectTagEXT;
+    PFN_vkSubmitDebugUtilsMessageEXT vkSubmitDebugUtilsMessageEXT;
+    // VK_EXT_debug_report
+    PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallbackEXT;
+    PFN_vkDebugReportMessageEXT vkDebugReportMessageEXT;
+    PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT;
+    // VK_KHR_surface
+    PFN_vkGetPhysicalDeviceSurfacePresentModesKHR vkGetPhysicalDeviceSurfacePresentModesKHR;
+    PFN_vkGetPhysicalDeviceSurfaceSupportKHR vkGetPhysicalDeviceSurfaceSupportKHR;
 
-#ifdef VK_USE_PLATFORM_WAYLAND_KHR
-#include "vulkan_wayland.h"
-#endif
+    // device-level functions
+    PFN_vkCreateBuffer vkCreateBuffer;
+    PFN_vkDestroyDevice vkDestroyDevice;
+    PFN_vkDeviceWaitIdle vkDeviceWaitIdle;
+    PFN_vkGetBufferMemoryRequirements vkGetBufferMemoryRequirements;
+    PFN_vkGetDeviceQueue vkGetDeviceQueue;
 
+    // device-level extension functions
+    PFN_vkAcquireNextImageKHR vkAcquireNextImageKHR;
+    PFN_vkCreateSwapchainKHR vkCreateSwapchainKHR;
+    PFN_vkDestroySwapchainKHR vkDestroySwapchainKHR;
+    PFN_vkGetSwapchainImagesKHR vkGetSwapchainImagesKHR;
+    PFN_vkQueuePresentKHR vkQueuePresentKHR;
 
-#ifdef VK_USE_PLATFORM_WIN32_KHR
-#include <windows.h>
-#include "vulkan_win32.h"
-#endif
+} vulkan_t;
 
+void vulkan_load_global_level_functions(vulkan_t *vulkan);
+void vulkan_create_instance(vulkan_t *vulkan);
+void vulkan_load_instance_level_functions(vulkan_t *vulkan);
+void vulkan_load_instance_level_extension_functions(vulkan_t *vulkan);
+void vulkan_create_physical_device(vulkan_t *vulkan);
+void vulkan_create_logical_device(vulkan_t *vulkan);
+void vulkan_load_device_level_functions(vulkan_t *vulkan);
+void vulkan_load_device_level_extension_functions(vulkan_t *vulkan);
+void vulkan_free_resources(vulkan_t *vulkan);
 
-#ifdef VK_USE_PLATFORM_XCB_KHR
-#include <xcb/xcb.h>
-#include "vulkan_xcb.h"
-#endif
-
-
-#ifdef VK_USE_PLATFORM_XLIB_KHR
-#include <X11/Xlib.h>
-#include "vulkan_xlib.h"
-#endif
-
-
-#ifdef VK_USE_PLATFORM_DIRECTFB_EXT
-#include <directfb.h>
-#include "vulkan_directfb.h"
-#endif
-
-
-#ifdef VK_USE_PLATFORM_XLIB_XRANDR_EXT
-#include <X11/Xlib.h>
-#include <X11/extensions/Xrandr.h>
-#include "vulkan_xlib_xrandr.h"
-#endif
-
-
-#ifdef VK_USE_PLATFORM_GGP
-#include <ggp_c/vulkan_types.h>
-#include "vulkan_ggp.h"
-#endif
-
-
-#ifdef VK_USE_PLATFORM_SCREEN_QNX
-#include <screen/screen.h>
-#include "vulkan_screen.h"
-#endif
-
-
-#ifdef VK_USE_PLATFORM_SCI
-#include <nvscisync.h>
-#include <nvscibuf.h>
-#include "vulkan_sci.h"
-#endif
-
-
-#ifdef VK_ENABLE_BETA_EXTENSIONS
-#include "vulkan_beta.h"
-#endif
-
-#endif // VULKAN_H_
+#endif // VULKAN_H

@@ -1,8 +1,14 @@
-all: *.o
-	clang $^ -o vulkookbook
+FLAGS=-std=c99 -Wall -g -c
+LIBS=-lvulkan -lSDL3
 
-%.o: %.c
-	clang -I/usr/local/include/vulkan -Wall -g -c $^
+all: $(patsubst %.c,%.o,$(wildcard *.c))
+	clang -o vulkookbook $^ $(LIBS)
+
+main.o: main.c
+	clang $(FLAGS) $<
+
+%.o: %.c %.h
+	clang $(FLAGS) $<
 
 clean:
-	rm -f *.o vulkookbook
+	rm -rf *.o vulkookbook
